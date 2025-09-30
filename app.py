@@ -51,8 +51,7 @@ You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and per
 - You MUST adopt the spirit and method of the chosen lineage for the dialogue.
 
 **Dialogue Flow:**
-- Your dialogue should be a fluid, guided conversation.
-- After a natural progression of inquiry, you must guide the conversation towards a conclusion.
+- Your dialogue should be a fluid, guided conversation that naturally progresses towards a conclusion.
 - Your final message must present a simple, practical contemplative exercise, followed by a brief, encouraging thought. Start this final message with the keyword "CONCLUSION:".
 
 **Formatting Rules:**
@@ -82,19 +81,15 @@ def parse_lineage_summaries(text):
     matches = pattern.findall(text)
     return {match[0]: match[1] for match in matches}
 
-# --- NEW: Parsing function for the "Discover More" section ---
 def parse_discover_more(text):
     if not text: return {}
     sections = {}
-    
     books_match = re.search(r"### 📚 Books to Read\s*(.*?)(?=### 📍 Places to Visit)", text, re.DOTALL)
     places_match = re.search(r"### 📍 Places to Visit\s*(.*?)(?=### 🎧 Music to Listen To)", text, re.DOTALL)
     music_match = re.search(r"### 🎧 Music to Listen To\s*(.*)", text, re.DOTALL)
-    
     sections["books"] = books_match.group(1).strip() if books_match else "No recommendations found."
     sections["places"] = places_match.group(1).strip() if places_match else "No recommendations found."
     sections["music"] = music_match.group(1).strip() if music_match else "No recommendations found."
-    
     return sections
 
 # --- SESSION STATE INITIALIZATION ---
@@ -112,7 +107,6 @@ load_custom_css()
 if st.session_state.stage == "start":
     st.caption("A guided journey into the heart of your experience.")
     st.session_state.vritti = st.text_area("To begin, what emotion, tendency, or situation are you exploring?", key="vritti_input", height=100)
-    
     if st.button("Begin Exploration"):
         if st.session_state.vritti:
             st.session_state.stage = "choose_lineage"
@@ -128,7 +122,6 @@ elif st.session_state.stage == "choose_lineage":
             response = call_gemini(prompt)
             if response:
                 st.session_state.lineages = parse_lineage_summaries(response)
-
     if not st.session_state.get('lineages'):
         st.warning("Could not find any specific paths for this topic. Please try a different query.")
     else:
@@ -153,12 +146,9 @@ elif st.session_state.stage == "dialogue":
         with st.spinner("Preparing your guide..."):
             master_prompt = f"For the lineage '{st.session_state.chosen_lineage}' and the query '{st.session_state.vritti}', choose the single most appropriate master to inspire the upcoming dialogue. Respond with ONLY the master's name."
             master_name = call_gemini(master_prompt)
-            
             if master_name:
                 st.session_state.chosen_master = master_name.strip()
-                st.session_state.messages = [
-                    { "role": "user", "parts": [f"I am a seeker exploring '{st.session_state.vritti}'. I have chosen the path of '{st.session_state.chosen_lineage}'. As a guide inspired by the teachings of {st.session_state.chosen_master}, please begin our contemplative dialogue by asking me your first question."] }
-                ]
+                st.session_state.messages = [{"role": "user", "parts": [f"I am a seeker exploring '{st.session_state.vritti}'. I have chosen the path of '{st.session_state.chosen_lineage}'. As a guide inspired by the teachings of {st.session_state.chosen_master}, please begin our contemplative dialogue by asking me your first question."]}]
                 first_question = call_gemini(st.session_state.messages[-1]['parts'][0], is_chat=True, history=[])
                 if first_question:
                     st.session_state.messages.append({"role": "model", "parts": [first_question]})
@@ -169,12 +159,10 @@ elif st.session_state.stage == "dialogue":
     
     if st.session_state.get('dialogue_started'):
         st.info(f"You are in a contemplative dialogue inspired by the **{st.session_state.chosen_lineage}** tradition.")
-        
         for message in st.session_state.get('messages', []):
             if "I am a seeker exploring" not in message["parts"][0]:
                 with st.chat_message(message["role"]):
                     st.markdown(message["parts"][0])
-
         if prompt := st.chat_input("Write your reflections here..."):
             st.session_state.messages.append({"role": "user", "parts": [prompt]})
             with st.spinner("..."):
@@ -188,7 +176,6 @@ elif st.session_state.stage == "dialogue":
                     else:
                         st.session_state.messages.append({"role": "model", "parts": [next_question]})
             st.rerun()
-
     st.divider()
     if st.button("End Session & Start Over"):
         restart_app()
@@ -202,12 +189,12 @@ elif st.session_state.stage == "final_summary":
         st.warning("The dialogue has ended.")
     
     st.divider()
-
-    # --- NEW FEATURE: "Discover More" section ---
+    
+    # --- FEATURE RESTORED: "Discover More" Tabs ---
     st.subheader("To Continue Your Journey...")
     if 'discover_more_content' not in st.session_state:
         with st.spinner("Finding further resources..."):
-            prompt = f"For the master {st.session_state.chosen_master} and their teachings on '{st.session_state.vritti}', provide suggestions for a user to continue their journey. Structure the response with these exact markdown headings: '### 📚 Books to Read', '### 📍 Places to Visit', and '### 🎧 Music to Listen To'. Under each heading, provide a short, numbered list of 1-2 suggestions with brief descriptions. For music, provide a YouTube search link. If no suggestions exist for a category, state 'No specific recommendations found.' under that heading."
+            prompt = f"For the master {st.session_state.chosen_master} and their teachings on '{st.session_state.vritti}', provide suggestions for a user to continue their journey. Structure the response with these exact markdown headings: '### 📚 Books to Read', '### 📍 Places to Visit', and '### 🎧 Music to Listen To'. Under each heading, provide a short, numbered list of 1-2 suggestions. For music, provide a YouTube search link. If no suggestions exist for a category, state 'No specific recommendations found.' under that heading."
             response = call_gemini(prompt)
             if response:
                 st.session_state.discover_more_content = parse_discover_more(response)
