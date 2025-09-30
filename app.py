@@ -307,7 +307,7 @@ elif st.session_state.stage == "show_final_teachings":
         with tab2: st.markdown(st.session_state.final_teachings.get("method", "No information provided."))
         with tab3: st.markdown(st.session_state.final_teachings.get("texts", "No information provided."))
     
-    st.divider()
+        st.divider()
         st.subheader("Discover More & Contemplate")
         disc_tabs = st.tabs(["📚 Further Reading", "📍 Places to Visit", "🗓️ Annual Events", "🙏 Practice & Music"])
 
