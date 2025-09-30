@@ -131,7 +131,7 @@ When providing detailed teachings, structure it with clear markdown headings: "#
 # --- HELPER FUNCTIONS ---
 def call_gemini(prompt):
     try:
-        model = genai.GenerativeModel(model_name='gemini-1.5-flash')
+        model = genai.GenerativeModel(model_name='gemini-2.5-pro')
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
