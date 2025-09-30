@@ -53,7 +53,7 @@ When you adopt the persona of a master for a guided dialogue, you must ask a ser
 # --- HELPER FUNCTIONS ---
 def call_gemini(prompt, is_chat=False, history=None):
     try:
-        model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=system_instruction)
+        model = genai.GenerativeModel(model_name='gemini-2.5-pro', system_instruction=system_instruction)
         if is_chat:
             chat = model.start_chat(history=history or [])
             response = chat.send_message(prompt)
