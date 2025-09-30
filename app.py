@@ -140,7 +140,7 @@ st.markdown("<h1 style='text-align: center;'>🧘 Spiritual Navigator</h1>", uns
 load_custom_css()
 
 if st.session_state.stage == "start":
-    st.caption("An interactive guide to ancient wisdom on modern emotions.")
+    st.markdown("<marquee>An interactive guide to ancient wisdom on modern emotions.</marquee>", unsafe_allow_html=True)
     user_question_input = st.text_area("Describe the emotion, situation, or question you are exploring:", key="question_input", height=100)
     
     st.write("---")
