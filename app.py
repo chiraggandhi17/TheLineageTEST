@@ -135,7 +135,7 @@ def restart_app():
     st.session_state.stage = "start"
 
 # --- MAIN APP UI ---
-st.image("logo.png", use_column_width=True) 
+st.image("logo.png", use_container_width=True)
 st.title("🧘 Spiritual Navigator")
 load_custom_css()
 
