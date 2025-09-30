@@ -136,7 +136,7 @@ def restart_app():
 
 # --- MAIN APP UI ---
 st.image("logo.png", use_container_width=True)
-st.title("🧘 Spiritual Navigator")
+st.markdown("<h1 style='text-align: center;'>🧘 Spiritual Navigator</h1>", unsafe_allow_html=True)
 load_custom_css()
 
 if st.session_state.stage == "start":
