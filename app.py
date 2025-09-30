@@ -56,7 +56,7 @@ You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and per
 
 **Formatting Rules:**
 - When asked for lineages, provide a markdown list where each item is a bolded heading, a colon, and a one-sentence summary.
-- When asked to choose a master, respond with ONLY the master's name.
+- When asked for a list of masters, provide ONLY a numbered list of the masters' names.
 - When asked for "Discover More" content, you must structure the response with these exact markdown headings: '### 📚 Books to Read', '### 📍 Places to Visit', and '### 🎧 Music to Listen To'. Under each heading, provide a short, numbered list of 1-2 suggestions. For music, provide a YouTube search link. If no suggestions exist for a category, state 'No specific recommendations found.' under that heading.
 """
 
@@ -80,6 +80,11 @@ def parse_lineage_summaries(text):
     pattern = re.compile(r"\*\*(.*?)\*\*\s*:\s*(.*)", re.MULTILINE)
     matches = pattern.findall(text)
     return {match[0]: match[1] for match in matches}
+
+def parse_list(text):
+    if not text: return []
+    items = re.findall(r'^\s*[\*\-\d]+\.?\s*(.+)$', text, re.MULTILINE)
+    return [item.strip().replace('**', '') for item in items if item.strip()]
 
 def parse_discover_more(text):
     if not text: return {}
@@ -107,6 +112,7 @@ load_custom_css()
 if st.session_state.stage == "start":
     st.caption("A guided journey into the heart of your experience.")
     st.session_state.vritti = st.text_area("To begin, what emotion, tendency, or situation are you exploring?", key="vritti_input", height=100)
+    
     if st.button("Begin Exploration"):
         if st.session_state.vritti:
             st.session_state.stage = "choose_lineage"
@@ -120,10 +126,21 @@ elif st.session_state.stage == "choose_lineage":
         with st.spinner("Finding relevant spiritual paths..."):
             prompt = f"For a user exploring '{st.session_state.vritti}', provide a markdown list of different spiritual lineages. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary of its approach."
             response = call_gemini(prompt)
+            st.session_state.raw_response = response
+            
+            if not response or not parse_lineage_summaries(response):
+                st.info("The first search was inconclusive. Trying a broader approach...")
+                prompt = f"List spiritual traditions that discuss '{st.session_state.vritti}'. For each, use the tradition name as a bold heading followed by a colon and a one-sentence summary."
+                response = call_gemini(prompt)
+                st.session_state.raw_response = response
+            
             if response:
                 st.session_state.lineages = parse_lineage_summaries(response)
+
     if not st.session_state.get('lineages'):
         st.warning("Could not find any specific paths for this topic. Please try a different query.")
+        with st.expander("Show Raw AI Response (for debugging)"):
+            st.code(st.session_state.get('raw_response', "No response from AI."))
     else:
         st.write("Choose the approach that resonates with you most:")
         for lineage, summary in st.session_state.lineages.items():
@@ -133,7 +150,7 @@ elif st.session_state.stage == "choose_lineage":
                 st.write(summary)
                 if st.button(f"Explore this Path", key=f"lineage_{lineage}"):
                     st.session_state.chosen_lineage = lineage
-                    st.session_state.stage = "dialogue"
+                    st.session_state.stage = "choose_master"
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
     st.divider()
@@ -141,28 +158,55 @@ elif st.session_state.stage == "choose_lineage":
         restart_app()
         st.rerun()
 
+elif st.session_state.stage == "choose_master":
+    st.subheader(f"Masters of {st.session_state.chosen_lineage}")
+    if 'masters' not in st.session_state:
+        with st.spinner("Finding masters from this lineage..."):
+            prompt = f"List key masters from the '{st.session_state.chosen_lineage}' lineage who spoke about topics like '{st.session_state.vritti}'. Respond with ONLY a numbered list of names."
+            response = call_gemini(prompt)
+            if response:
+                st.session_state.masters = parse_list(response)
+
+    if not st.session_state.get('masters'):
+        st.warning("Could not find masters for this path. Please try another.")
+    else:
+        st.write("Choose your guide for this session:")
+        for master in st.session_state.masters:
+            if st.button(master, key=f"master_{master}", use_container_width=True):
+                st.session_state.chosen_master = master
+                st.session_state.stage = "dialogue"
+                st.rerun()
+                
+    st.divider()
+    if st.button("Back to Lineages"):
+        st.session_state.stage = "choose_lineage"
+        keys_to_clear = ['masters', 'chosen_lineage']
+        for key in keys_to_clear:
+            if key in st.session_state: del st.session_state[key]
+        st.rerun()
+
 elif st.session_state.stage == "dialogue":
     if 'dialogue_started' not in st.session_state:
         with st.spinner("Preparing your guide..."):
-            master_prompt = f"For the lineage '{st.session_state.chosen_lineage}' and the query '{st.session_state.vritti}', choose the single most appropriate master to inspire the upcoming dialogue. Respond with ONLY the master's name."
-            master_name = call_gemini(master_prompt)
-            if master_name:
-                st.session_state.chosen_master = master_name.strip()
-                st.session_state.messages = [{"role": "user", "parts": [f"I am a seeker exploring '{st.session_state.vritti}'. I have chosen the path of '{st.session_state.chosen_lineage}'. As a guide inspired by the teachings of {st.session_state.chosen_master}, please begin our contemplative dialogue by asking me your first question."]}]
-                first_question = call_gemini(st.session_state.messages[-1]['parts'][0], is_chat=True, history=[])
-                if first_question:
-                    st.session_state.messages.append({"role": "model", "parts": [first_question]})
-                    st.session_state.dialogue_started = True
+            st.session_state.messages = [
+                { "role": "user", "parts": [f"I am a seeker exploring '{st.session_state.vritti}'. I have chosen the path of '{st.session_state.chosen_lineage}' and the master '{st.session_state.chosen_master}'. As a guide inspired by their teachings, please begin our contemplative dialogue by asking me your first question."] }
+            ]
+            first_question = call_gemini(st.session_state.messages[-1]['parts'][0], is_chat=True, history=[])
+            if first_question:
+                st.session_state.messages.append({"role": "model", "parts": [first_question]})
+                st.session_state.dialogue_started = True
             else:
-                st.error("Could not select a guide. Please try again.")
-                st.session_state.stage = "choose_lineage"
+                st.error("Could not start the dialogue. Please try again.")
+                st.session_state.stage = "choose_master"
     
     if st.session_state.get('dialogue_started'):
-        st.info(f"You are in a contemplative dialogue inspired by the **{st.session_state.chosen_lineage}** tradition.")
+        st.info(f"You are in a contemplative dialogue inspired by **{st.session_state.chosen_master}** from the **{st.session_state.chosen_lineage}** tradition.")
+        
         for message in st.session_state.get('messages', []):
             if "I am a seeker exploring" not in message["parts"][0]:
                 with st.chat_message(message["role"]):
                     st.markdown(message["parts"][0])
+
         if prompt := st.chat_input("Write your reflections here..."):
             st.session_state.messages.append({"role": "user", "parts": [prompt]})
             with st.spinner("..."):
@@ -176,6 +220,7 @@ elif st.session_state.stage == "dialogue":
                     else:
                         st.session_state.messages.append({"role": "model", "parts": [next_question]})
             st.rerun()
+
     st.divider()
     if st.button("End Session & Start Over"):
         restart_app()
@@ -190,7 +235,6 @@ elif st.session_state.stage == "final_summary":
     
     st.divider()
     
-    # --- FEATURE RESTORED: "Discover More" Tabs ---
     st.subheader("To Continue Your Journey...")
     if 'discover_more_content' not in st.session_state:
         with st.spinner("Finding further resources..."):
