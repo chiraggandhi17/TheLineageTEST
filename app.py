@@ -43,16 +43,21 @@ except (KeyError, FileNotFoundError):
     st.stop()
 
 # --- SYSTEM INSTRUCTION (THE "GEM" PROMPT) ---
+# --- MODIFIED: More nuanced instructions for the AI guide ---
 system_instruction = """
-You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and personal contemplative journey for the user.
+You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and personal contemplative journey.
+
 **Persona & Method:**
-- When guiding a dialogue, you will act as a wise, compassionate guide inspired by the chosen master's teachings, without directly mimicking them.
-- You will adapt your questions based on the user's temperament and their previous responses.
+- You will act as a wise, compassionate guide.
+- **You MUST adopt the spirit and method of the chosen lineage for the dialogue.** For example, if the path is Advaita, your questions will gently guide the user towards self-inquiry. If the path is Bhakti, your questions will encourage reflection on love and surrender. If the path is Zen, your questions will be direct and koan-like.
+- Your questions should be tailored to the user's temperament (provided in the initial prompt) and their previous responses.
+
 **Dialogue Structure (Strict):**
-1.  **Turn 1 (First Question):** Start with an open-ended question to help the user explore their initial feeling.
+1.  **Turn 1 (First Question):** Start with an open-ended question to help the user explore their initial feeling, framed in the style of the chosen lineage.
 2.  **Turns 2-3 (Deepening Questions):** Based on the user's response, ask 1-2 follow-up questions that guide them deeper.
-3.  **Turn 4 (The Practice):** Shift from questioning to action. Suggest a single, simple, practical contemplative exercise.
-4.  **Turn 5 (Conclusion):** Your final message must be a brief, encouraging concluding thought. Start this final message with the keyword "CONCLUSION:".
+3.  **Turn 4 (The Practice):** Shift from questioning to action. Suggest a single, simple, practical contemplative exercise consistent with the lineage.
+4.  **Turn 5 (Conclusion):** Your final message must be a brief, encouraging concluding thought or blessing. Start this final message with the keyword "CONCLUSION:".
+
 **Formatting Rules:**
 - When asked for lineages, provide a markdown list where each item is a bolded heading, a colon, and a one-sentence summary.
 - When asked to choose a master, respond with ONLY the master's name.
@@ -61,7 +66,7 @@ You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and per
 # --- HELPER FUNCTIONS ---
 def call_gemini(prompt, is_chat=False, history=None):
     try:
-        model = genai.GenerativeModel(model_name='gemini-2.5-flash', system_instruction=system_instruction)
+        model = genai.GenerativeModel(model_name='gemini-2.5-pro', system_instruction=system_instruction)
         if is_chat:
             chat = model.start_chat(history=history or [])
             response = chat.send_message(prompt)
@@ -116,25 +121,13 @@ elif st.session_state.stage == "choose_lineage":
     st.subheader(f"Pathways for: {st.session_state.vritti.capitalize()}")
     if 'lineages' not in st.session_state:
         with st.spinner("Finding relevant spiritual paths..."):
-            # --- MODIFIED: Primary, more complex prompt ---
-            prompt1 = f"For a user exploring '{st.session_state.vritti}' with guiding principles of '{st.session_state.principles_summary}', provide a markdown list of 5 different spiritual lineages. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary of its approach."
-            response = call_gemini(prompt1)
-            st.session_state.raw_response = response
-            
-            # --- NEW: Fallback Mechanism ---
-            if not response or not parse_lineage_summaries(response):
-                st.info("The first search was inconclusive. Trying a broader approach...")
-                prompt2 = f"List 5 spiritual traditions that discuss '{st.session_state.vritti}'. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary."
-                response = call_gemini(prompt2)
-                st.session_state.raw_response = response
-            
+            prompt = f"For a user exploring '{st.session_state.vritti}', provide a markdown list of 5 different spiritual lineages. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary of its approach."
+            response = call_gemini(prompt)
             if response:
                 st.session_state.lineages = parse_lineage_summaries(response)
 
     if not st.session_state.get('lineages'):
         st.warning("Could not find any specific paths for this topic. Please try a different query.")
-        with st.expander("Show Raw AI Response (for debugging)"):
-            st.code(st.session_state.get('raw_response', "No response from AI."))
     else:
         st.write("Choose the approach that resonates with you most:")
         for lineage, summary in st.session_state.lineages.items():
@@ -153,26 +146,31 @@ elif st.session_state.stage == "choose_lineage":
         st.rerun()
 
 elif st.session_state.stage == "dialogue":
-    if 'chosen_master' not in st.session_state:
+    if 'dialogue_started' not in st.session_state:
         with st.spinner("Preparing your guide..."):
-            prompt = f"For the lineage '{st.session_state.chosen_lineage}' and the query '{st.session_state.vritti}', choose the single most appropriate master to inspire the upcoming dialogue. Respond with ONLY the master's name."
-            master_name = call_gemini(prompt)
+            # This is the first and only time we choose a master, to inspire the dialogue
+            master_prompt = f"For the lineage '{st.session_state.chosen_lineage}' and the query '{st.session_state.vritti}', choose the single most appropriate master to inspire the upcoming dialogue. Respond with ONLY the master's name."
+            master_name = call_gemini(master_prompt)
+            
             if master_name:
                 st.session_state.chosen_master = master_name.strip()
+                # Initialize the conversation with the detailed prompt
                 st.session_state.messages = [
                     { "role": "user", "parts": [f"I am a seeker exploring '{st.session_state.vritti}'. My temperament is: '{st.session_state.principles_summary}'. I have chosen the path of '{st.session_state.chosen_lineage}'. As a guide inspired by the teachings of {st.session_state.chosen_master}, please begin our contemplative dialogue by asking me your first question."] }
                 ]
                 first_question = call_gemini(st.session_state.messages[-1]['parts'][0], is_chat=True, history=[])
                 if first_question:
                     st.session_state.messages.append({"role": "model", "parts": [first_question]})
+                    st.session_state.dialogue_started = True
             else:
                 st.error("Could not select a guide. Please try again.")
-                st.session_state.stage = "choose_lineage"
+                st.session_state.stage = "choose_lineage" # Go back if failed
     
-    if st.session_state.get('chosen_master'):
+    if st.session_state.get('dialogue_started'):
         st.info(f"You are in a contemplative dialogue inspired by the **{st.session_state.chosen_lineage}** tradition.")
         
         for message in st.session_state.get('messages', []):
+            # Don't show the initial long system prompt to the user
             if "I am a seeker exploring" not in message["parts"][0]:
                 with st.chat_message(message["role"]):
                     st.markdown(message["parts"][0])
