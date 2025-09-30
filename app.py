@@ -43,6 +43,7 @@ except (KeyError, FileNotFoundError):
     st.stop()
 
 # --- SYSTEM INSTRUCTION (THE "GEM" PROMPT) ---
+# --- MODIFIED: Dialogue is now more fluid ---
 system_instruction = """
 You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and personal contemplative journey.
 
@@ -50,11 +51,12 @@ You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and per
 - You will act as a wise, compassionate guide inspired by the chosen master's teachings, without directly mimicking them.
 - You MUST adopt the spirit and method of the chosen lineage for the dialogue.
 
-**Dialogue Structure (Strict):**
-1.  **Turn 1 (First Question):** Start with an open-ended question to help the user explore their initial feeling, framed in the style of the chosen lineage.
-2.  **Turns 2-3 (Deepening Questions):** Based on the user's response, ask 1-2 follow-up questions.
-3.  **Turn 4 (The Practice):** Shift from questioning to action by suggesting a single, practical contemplative exercise.
-4.  **Turn 5 (Conclusion):** Your final message must be a brief, encouraging concluding thought. Start this message with "CONCLUSION:".
+**Dialogue Flow:**
+- Your dialogue should be a fluid, guided conversation.
+- Ask one clear, contemplative question per turn.
+- Listen to the user's response and tailor your next question to guide them deeper.
+- After a natural progression of inquiry (typically 4-6 turns), you must guide the conversation towards a conclusion by shifting from questioning to action.
+- Your final message must present a simple, practical contemplative exercise based on the conversation, followed by a brief, encouraging thought. Start this final message with the keyword "CONCLUSION:".
 
 **Formatting Rules:**
 - When asked for lineages, provide a markdown list where each item is a bolded heading, a colon, and a one-sentence summary.
@@ -64,7 +66,7 @@ You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and per
 # --- HELPER FUNCTIONS ---
 def call_gemini(prompt, is_chat=False, history=None):
     try:
-        model = genai.GenerativeModel(model_name='gemini-2.5-pro', system_instruction=system_instruction)
+        model = genai.GenerativeModel(model_name='gemini-2.5-flash', system_instruction=system_instruction)
         if is_chat:
             chat = model.start_chat(history=history or [])
             response = chat.send_message(prompt)
@@ -109,16 +111,14 @@ elif st.session_state.stage == "choose_lineage":
     st.subheader(f"Pathways for: {st.session_state.vritti.capitalize()}")
     if 'lineages' not in st.session_state:
         with st.spinner("Finding relevant spiritual paths..."):
-            # --- MODIFIED: Simplified primary prompt ---
-            prompt1 = f"For a user exploring '{st.session_state.vritti}', provide a markdown list of 5 different spiritual lineages. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary of its approach."
-            response = call_gemini(prompt1)
+            prompt = f"For a user exploring '{st.session_state.vritti}', provide a markdown list of different spiritual lineages. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary of its approach."
+            response = call_gemini(prompt)
             st.session_state.raw_response = response
             
-            # --- Fallback Mechanism ---
             if not response or not parse_lineage_summaries(response):
                 st.info("The first search was inconclusive. Trying a broader approach...")
-                prompt2 = f"List 5 spiritual traditions that discuss '{st.session_state.vritti}'. For each, use the tradition name as a bold heading followed by a colon and a one-sentence summary."
-                response = call_gemini(prompt2)
+                prompt = f"List spiritual traditions that discuss '{st.session_state.vritti}'. For each, use the tradition name as a bold heading followed by a colon and a one-sentence summary."
+                response = call_gemini(prompt)
                 st.session_state.raw_response = response
             
             if response:
@@ -192,7 +192,7 @@ elif st.session_state.stage == "dialogue":
         st.rerun()
 
 elif st.session_state.stage == "final_summary":
-    st.subheader("A Moment for Contemplation")
+    st.subheader("A Concluding Contemplation")
     if st.session_state.get('final_summary'):
         st.markdown(st.session_state.final_summary)
     else:
