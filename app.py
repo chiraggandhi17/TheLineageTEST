@@ -67,8 +67,56 @@ except (KeyError, FileNotFoundError):
 
 # --- GUIDING PRINCIPLES QUIZ QUESTIONS ---
 QUESTIONS = [
-    {"question": "When facing a problem, I tend to:", "options": ["Analyze it logically.", "Feel my way through it intuitively.", "Seek guidance from wisdom texts.", "Take action and learn by doing."], "key": "q1"},
-    {"question": "I feel most connected to the divine through:", "options": ["Silent contemplation.", "Devotional practices.", "Intellectual understanding.", "Service to others."], "key": "q2"},
+    {
+        "question": "When you have a free weekend, you are more likely to:",
+        "options": [
+            "Plan an activity or a project to accomplish something.",
+            "Relax, read, and reflect with minimal plans.",
+            "Spend quality time connecting with friends or family.",
+            "Spontaneously decide what to do in the moment."
+        ],
+        "key": "q1"
+    },
+    {
+        "question": "When making an important life decision, you rely more on:",
+        "options": [
+            "A thorough analysis of pros and cons.",
+            "Your gut feeling or strong intuition.",
+            "Advice from trusted mentors or family.",
+            "What has practically worked for you in the past."
+        ],
+        "key": "q2"
+    },
+    {
+        "question": "After a long and draining week, you recharge by:",
+        "options": [
+            "Spending quiet time alone.",
+            "Being with a close group of supportive people.",
+            "Losing yourself in a creative or engaging activity.",
+            "Learning something new, like watching a documentary."
+        ],
+        "key": "q3"
+    },
+    {
+        "question": "Which statement best describes your approach to life?",
+        "options": [
+            "I thrive with a consistent routine and a clear plan.",
+            "I prefer to embrace change and adapt as I go.",
+            "I seek a balance between a stable foundation and new experiences.",
+            "I am guided by a deep sense of purpose or a mission."
+        ],
+        "key": "q4"
+    },
+    {
+        "question": "What tends to capture your attention more?",
+        "options": [
+            "The underlying meaning and 'why' behind things.",
+            "The practical details and 'how' to get things done.",
+            "The emotional tone and feeling of a situation.",
+            "The potential for future possibilities and innovations."
+        ],
+        "key": "q5"
+    }
 ]
 
 # --- SYSTEM INSTRUCTION (THE "GEM" PROMPT) ---
@@ -78,15 +126,12 @@ When asked for anonymous teachings, provide a numbered list of 5 brief, one-or-t
 When asked to identify lineages for a teaching, provide a numbered list of ONLY the lineage names.
 When asked for a list of masters for a SINGLE lineage, respond with a numbered list. For each master, provide their name, time period, and a key associated location, separated by '|'.
 When providing detailed teachings, structure it with clear markdown headings: "### Core Philosophical Concepts", "### The Prescribed Method or Practice", and "### Reference to Key Texts".
-When asked for books, places, events, or music, if no relevant information exists, you must respond with ONLY the single word 'None'.
-When asked for book recommendations, respond with a markdown table with columns: Book, Description, and Link (to search on Amazon.in).
-When asked to generate a contemplative practice, present it as a series of simple, actionable steps. After the steps, if a relevant and soothing bhajan, chant, or hymn is associated, add a section '### Suggested Listening' and a markdown link to a YouTube search for it.
 """
 
 # --- HELPER FUNCTIONS ---
 def call_gemini(prompt):
     try:
-        model = genai.GenerativeModel(model_name='gemini-2.5-pro')
+        model = genai.GenerativeModel(model_name='gemini-1.5-flash')
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
@@ -135,7 +180,7 @@ def restart_app():
     st.session_state.stage = "start"
 
 # --- MAIN APP UI ---
-st.image("logo.png", use_container_width=True)
+st.image("banner.png", use_container_width=True) 
 st.markdown("<h1 style='text-align: center;'>🧘 Spiritual Navigator</h1>", unsafe_allow_html=True)
 load_custom_css()
 
@@ -217,12 +262,13 @@ elif st.session_state.stage == "show_lineage_list":
 elif st.session_state.stage == "show_masters":
     st.header(st.session_state.chosen_lineage)
     if 'masters_list' not in st.session_state:
-        with st.spinner(f"Finding masters..."):
+        with st.spinner(f"Finding masters from the {st.session_state.chosen_lineage} lineage..."):
             prompt = f"For the lineage '{st.session_state.chosen_lineage}', provide a numbered list of key masters who spoke on '{st.session_state.vritti}'. For each, include their name, time period, and a key associated location, separated by '|'."
             response = call_gemini(prompt)
             st.session_state.raw_response = response
             if response:
                 st.session_state.masters_list = parse_masters_list(response)
+    
     if not st.session_state.get('masters_list'):
         st.warning("Could not parse the list of masters from the AI's response.")
         with st.expander("Show Raw AI Response (for debugging)"):
@@ -260,64 +306,9 @@ elif st.session_state.stage == "show_final_teachings":
         with tab1: st.markdown(st.session_state.final_teachings.get("concepts", "No information provided."))
         with tab2: st.markdown(st.session_state.final_teachings.get("method", "No information provided."))
         with tab3: st.markdown(st.session_state.final_teachings.get("texts", "No information provided."))
-        
-        st.divider()
-        st.subheader("Discover More & Contemplate")
-        disc_tabs = st.tabs(["📚 Further Reading", "📍 Places to Visit", "🗓️ Annual Events", "🙏 Practice & Music"])
-
-        with disc_tabs[0]:
-            if 'books' not in st.session_state:
-                with st.spinner("Finding relevant books..."):
-                    prompt = f"Suggest 2-3 books for understanding {st.session_state.chosen_master}'s core teachings. Respond with a markdown table with columns: Book, Description, and Link (to search on Amazon.in)."
-                    response = call_gemini(prompt)
-                    st.session_state.books = response or "None"
-            if "None" in st.session_state.books.strip():
-                st.info("No specific book recommendations were found.")
-            else:
-                st.markdown(st.session_state.books)
-        
-        with disc_tabs[1]:
-            if 'places' not in st.session_state:
-                with st.spinner("Locating significant places..."):
-                    prompt = f"Is there a significant place to visit associated with {st.session_state.chosen_master}? Respond with a markdown table with columns: Place, Description, and Location. If none, respond 'None'."
-                    response = call_gemini(prompt)
-                    st.session_state.places = response or "None"
-            if "None" in st.session_state.places.strip():
-                st.info(f"No specific places are associated with {st.session_state.chosen_master}.")
-            else:
-                st.markdown(st.session_state.places)
-
-        with disc_tabs[2]:
-            if 'events' not in st.session_state:
-                with st.spinner("Checking for annual events..."):
-                    prompt = f"Are there special annual events or festivals associated with {st.session_state.chosen_master}? Respond with a markdown table: Event, Description, 'Time of Year'. If none, respond 'None'."
-                    response = call_gemini(prompt)
-                    st.session_state.events = response or "None"
-            if "None" in st.session_state.events.strip():
-                st.info(f"No specific annual events are associated with {st.session_state.chosen_master}.")
-            else:
-                st.markdown(st.session_state.events)
-        
-        with disc_tabs[3]:
-            st.info("A practice to deepen your understanding.")
-            if 'practice_text' not in st.session_state:
-                with st.spinner("Generating a relevant practice..."):
-                    prompt = f"Based on the teachings of {st.session_state.chosen_master}, generate a short, guided contemplative practice. If a relevant bhajan or chant is associated, add a '### Suggested Listening' section with a YouTube search link."
-                    response = call_gemini(prompt)
-                    st.session_state.practice_text = response or "No practice could be generated."
-            st.markdown(st.session_state.practice_text)
-            st.text_area("Your Contemplation Journal:", height=150, key="journal_entry", help="Entries are for this session only.")
     
     st.divider()
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("⬅️ Back to Masters List", use_container_width=True):
-            st.session_state.stage = "show_lineage_reveal"
-            keys_to_clear = ['final_teachings', 'books', 'places', 'events', 'practice_text']
-            for key in keys_to_clear:
-                if key in st.session_state: del st.session_state[key]
-            st.rerun()
-    with col2:
-        if st.button("Start Over", use_container_width=True):
-            restart_app()
-            st.rerun()
+    if st.button("Back to Masters List"):
+        st.session_state.stage = "show_lineage_reveal"
+        if 'final_teachings' in st.session_state: del st.session_state['final_teachings']
+        st.rerun()
