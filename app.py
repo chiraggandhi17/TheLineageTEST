@@ -43,24 +43,22 @@ except (KeyError, FileNotFoundError):
     st.stop()
 
 # --- SYSTEM INSTRUCTION (THE "GEM" PROMPT) ---
-# --- MODIFIED: Dialogue is now more fluid ---
 system_instruction = """
 You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and personal contemplative journey.
 
 **Persona & Method:**
-- You will act as a wise, compassionate guide inspired by the chosen master's teachings, without directly mimicking them.
+- You will act as a wise, compassionate guide inspired by the chosen master's teachings.
 - You MUST adopt the spirit and method of the chosen lineage for the dialogue.
 
 **Dialogue Flow:**
 - Your dialogue should be a fluid, guided conversation.
-- Ask one clear, contemplative question per turn.
-- Listen to the user's response and tailor your next question to guide them deeper.
-- After a natural progression of inquiry (typically 4-6 turns), you must guide the conversation towards a conclusion by shifting from questioning to action.
-- Your final message must present a simple, practical contemplative exercise based on the conversation, followed by a brief, encouraging thought. Start this final message with the keyword "CONCLUSION:".
+- After a natural progression of inquiry, you must guide the conversation towards a conclusion.
+- Your final message must present a simple, practical contemplative exercise, followed by a brief, encouraging thought. Start this final message with the keyword "CONCLUSION:".
 
 **Formatting Rules:**
 - When asked for lineages, provide a markdown list where each item is a bolded heading, a colon, and a one-sentence summary.
 - When asked to choose a master, respond with ONLY the master's name.
+- When asked for "Discover More" content, you must structure the response with these exact markdown headings: '### 📚 Books to Read', '### 📍 Places to Visit', and '### 🎧 Music to Listen To'. Under each heading, provide a short, numbered list of 1-2 suggestions. For music, provide a YouTube search link. If no suggestions exist for a category, state 'No specific recommendations found.' under that heading.
 """
 
 # --- HELPER FUNCTIONS ---
@@ -83,6 +81,21 @@ def parse_lineage_summaries(text):
     pattern = re.compile(r"\*\*(.*?)\*\*\s*:\s*(.*)", re.MULTILINE)
     matches = pattern.findall(text)
     return {match[0]: match[1] for match in matches}
+
+# --- NEW: Parsing function for the "Discover More" section ---
+def parse_discover_more(text):
+    if not text: return {}
+    sections = {}
+    
+    books_match = re.search(r"### 📚 Books to Read\s*(.*?)(?=### 📍 Places to Visit)", text, re.DOTALL)
+    places_match = re.search(r"### 📍 Places to Visit\s*(.*?)(?=### 🎧 Music to Listen To)", text, re.DOTALL)
+    music_match = re.search(r"### 🎧 Music to Listen To\s*(.*)", text, re.DOTALL)
+    
+    sections["books"] = books_match.group(1).strip() if books_match else "No recommendations found."
+    sections["places"] = places_match.group(1).strip() if places_match else "No recommendations found."
+    sections["music"] = music_match.group(1).strip() if music_match else "No recommendations found."
+    
+    return sections
 
 # --- SESSION STATE INITIALIZATION ---
 if 'stage' not in st.session_state:
@@ -113,21 +126,11 @@ elif st.session_state.stage == "choose_lineage":
         with st.spinner("Finding relevant spiritual paths..."):
             prompt = f"For a user exploring '{st.session_state.vritti}', provide a markdown list of different spiritual lineages. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary of its approach."
             response = call_gemini(prompt)
-            st.session_state.raw_response = response
-            
-            if not response or not parse_lineage_summaries(response):
-                st.info("The first search was inconclusive. Trying a broader approach...")
-                prompt = f"List spiritual traditions that discuss '{st.session_state.vritti}'. For each, use the tradition name as a bold heading followed by a colon and a one-sentence summary."
-                response = call_gemini(prompt)
-                st.session_state.raw_response = response
-            
             if response:
                 st.session_state.lineages = parse_lineage_summaries(response)
 
     if not st.session_state.get('lineages'):
         st.warning("Could not find any specific paths for this topic. Please try a different query.")
-        with st.expander("Show Raw AI Response (for debugging)"):
-            st.code(st.session_state.get('raw_response', "No response from AI."))
     else:
         st.write("Choose the approach that resonates with you most:")
         for lineage, summary in st.session_state.lineages.items():
@@ -197,6 +200,28 @@ elif st.session_state.stage == "final_summary":
         st.markdown(st.session_state.final_summary)
     else:
         st.warning("The dialogue has ended.")
+    
+    st.divider()
+
+    # --- NEW FEATURE: "Discover More" section ---
+    st.subheader("To Continue Your Journey...")
+    if 'discover_more_content' not in st.session_state:
+        with st.spinner("Finding further resources..."):
+            prompt = f"For the master {st.session_state.chosen_master} and their teachings on '{st.session_state.vritti}', provide suggestions for a user to continue their journey. Structure the response with these exact markdown headings: '### 📚 Books to Read', '### 📍 Places to Visit', and '### 🎧 Music to Listen To'. Under each heading, provide a short, numbered list of 1-2 suggestions with brief descriptions. For music, provide a YouTube search link. If no suggestions exist for a category, state 'No specific recommendations found.' under that heading."
+            response = call_gemini(prompt)
+            if response:
+                st.session_state.discover_more_content = parse_discover_more(response)
+
+    if st.session_state.get('discover_more_content'):
+        tabs = st.tabs(["📚 Read", "📍 Visit", "🎧 Listen"])
+        content = st.session_state.discover_more_content
+        with tabs[0]:
+            st.markdown(content.get("books", "Could not load recommendations."))
+        with tabs[1]:
+            st.markdown(content.get("places", "Could not load recommendations."))
+        with tabs[2]:
+            st.markdown(content.get("music", "Could not load recommendations."))
+
     st.divider()
     if st.button("Begin a New Journey"):
         restart_app()
