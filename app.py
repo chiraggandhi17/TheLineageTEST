@@ -308,7 +308,60 @@ elif st.session_state.stage == "show_final_teachings":
         with tab3: st.markdown(st.session_state.final_teachings.get("texts", "No information provided."))
     
     st.divider()
-    if st.button("Back to Masters List"):
-        st.session_state.stage = "show_lineage_reveal"
-        if 'final_teachings' in st.session_state: del st.session_state['final_teachings']
-        st.rerun()
+        st.subheader("Discover More & Contemplate")
+        disc_tabs = st.tabs(["📚 Further Reading", "📍 Places to Visit", "🗓️ Annual Events", "🙏 Practice & Music"])
+
+        with disc_tabs[0]:
+            if 'books' not in st.session_state:
+                with st.spinner("Finding relevant books..."):
+                    prompt = f"Suggest 2-3 books for understanding {st.session_state.chosen_master}'s core teachings. Respond with a markdown table with columns: Book, Description, and Link (to search on Amazon.in)."
+                    response = call_gemini(prompt)
+                    st.session_state.books = response or "None"
+            if "None" in st.session_state.books.strip():
+                st.info("No specific book recommendations were found.")
+            else:
+                st.markdown(st.session_state.books)
+        
+        with disc_tabs[1]:
+            if 'places' not in st.session_state:
+                with st.spinner("Locating significant places..."):
+                    prompt = f"Is there a significant place to visit associated with {st.session_state.chosen_master}? Respond with a markdown table with columns: Place, Description, and Location. If none, respond 'None'."
+                    response = call_gemini(prompt)
+                    st.session_state.places = response or "None"
+            if "None" in st.session_state.places.strip():
+                st.info(f"No specific places are associated with {st.session_state.chosen_master}.")
+            else:
+                st.markdown(st.session_state.places)
+
+        with disc_tabs[2]:
+            if 'events' not in st.session_state:
+                with st.spinner("Checking for annual events..."):
+                    prompt = f"Are there special annual events or festivals associated with {st.session_state.chosen_master}? Respond with a markdown table: Event, Description, 'Time of Year'. If none, respond 'None'."
+                    response = call_gemini(prompt)
+                    st.session_state.events = response or "None"
+            if "None" in st.session_state.events.strip():
+                st.info(f"No specific annual events are associated with {st.session_state.chosen_master}.")
+            else:
+                st.markdown(st.session_state.events)
+        
+        with disc_tabs[3]:
+            st.info("A practice to deepen your understanding.")
+            if 'practice_text' not in st.session_state:
+                with st.spinner("Generating a relevant practice..."):
+                    prompt = f"Based on the teachings of {st.session_state.chosen_master}, generate a short, guided contemplative practice. If a relevant bhajan or chant is associated, add a '### Suggested Listening' section with a YouTube search link."
+                    response = call_gemini(prompt)
+                    st.session_state.practice_text = response or "No practice could be generated."
+            st.markdown(st.session_state.practice_text)
+            st.text_area("Your Contemplation Journal:", height=150, key="journal_entry", help="Entries are for this session only.")
+    
+    st.divider()
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("⬅️ Back to Masters List", use_container_width=True):
+            st.session_state.stage = "show_masters"
+            if 'final_teachings' in st.session_state: del st.session_state['final_teachings']
+            st.rerun()
+    with col2:
+        if st.button("Start Over restarting", use_container_width=True):
+            restart_app()
+            st.rerun()
