@@ -27,11 +27,6 @@ def load_custom_css():
             }
             body, .stApp { background-color: var(--background-color); }
             h1, h2, h3 { font-family: var(--font); }
-            .stTabs [data-baseweb="tab"][aria-selected="true"] {
-                background-color: transparent;
-                color: var(--primary-color);
-                border-bottom: 2px solid var(--primary-color);
-            }
             .st-emotion-cache-1r6slb0, .st-emotion-cache-p5msec, .lineage-card { 
                 border-radius: 10px; padding: 1.5rem; background-color: var(--secondary-background-color); 
                 box-shadow: 0 4px 8px rgba(0,0,0,0.08); margin-bottom: 1.5rem;
@@ -48,19 +43,22 @@ except (KeyError, FileNotFoundError):
     st.stop()
 
 # --- SYSTEM INSTRUCTION (THE "GEM" PROMPT) ---
-# --- MODIFIED: More nuanced instructions for the AI guide ---
 system_instruction = """
-You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and personal contemplative journey for the user.
+You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and personal contemplative journey for the user in a structured, 4-5 turn dialogue.
 
 **Persona & Method:**
-- When guiding a dialogue, you will not mimic or roleplay as a master. Instead, you will act as a wise, compassionate guide who is deeply knowledgeable about the chosen master's teachings.
-- You will adopt the *spirit and method* of the chosen lineage. For example, if the path is Advaita, your questions will gently guide the user towards self-inquiry. If the path is Bhakti, your questions will encourage reflection on love and surrender.
-- **Crucially, you must consider the user's temperament (provided in the initial prompt) and their previous responses to tailor your follow-up questions, making the dialogue truly personal and progressive.**
+- You will act as a wise, compassionate guide inspired by the chosen master's teachings, without directly mimicking them.
+- You will adapt your questions based on the user's temperament (provided initially) and their responses.
+
+**Dialogue Structure (Strict):**
+1.  **Turn 1 (First Question):** Start with an open-ended question to help the user explore their initial feeling.
+2.  **Turns 2-3 (Deepening Questions):** Based on the user's response, ask 1-2 follow-up questions that guide them deeper into self-inquiry, in the spirit of the chosen lineage.
+3.  **Turn 4 (The Practice):** Shift from questioning to action. Suggest a single, simple, practical contemplative exercise the user can do right now.
+4.  **Turn 5 (Conclusion):** After presenting the practice, your final message must be a brief, encouraging concluding thought or blessing to leave the user with. Start this final message with the keyword "CONCLUSION:".
 
 **Formatting Rules:**
 - When asked for lineages, provide a markdown list where each item is a bolded heading, a colon, and a one-sentence summary.
 - When asked to choose a master, respond with ONLY the master's name.
-- When guiding the dialogue, ask one clear, contemplative question per turn. Your final message should be a concluding thought to leave the user with.
 """
 
 # --- HELPER FUNCTIONS ---
@@ -122,13 +120,7 @@ elif st.session_state.stage == "choose_lineage":
     if 'lineages' not in st.session_state:
         with st.spinner("Finding relevant spiritual paths..."):
             prompt = f"For a user exploring '{st.session_state.vritti}', provide a markdown list of 5 different spiritual lineages. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary of its approach."
-            # --- Fallback Mechanism ---
             response = call_gemini(prompt)
-            if not response or not parse_lineage_summaries(response):
-                st.info("The primary search was inconclusive. Trying a broader approach...")
-                prompt = f"List 5 spiritual traditions that discuss '{st.session_state.vritti}'."
-                response = call_gemini(prompt) # Try the simpler prompt
-            
             if response:
                 st.session_state.lineages = parse_lineage_summaries(response)
 
@@ -158,7 +150,6 @@ elif st.session_state.stage == "dialogue":
             master_name = call_gemini(prompt)
             if master_name:
                 st.session_state.chosen_master = master_name.strip()
-                # Initialize the conversation with the detailed prompt
                 st.session_state.messages = [
                     { "role": "user", "parts": [f"I am a seeker exploring '{st.session_state.vritti}'. My temperament is: '{st.session_state.principles_summary}'. I have chosen the path of '{st.session_state.chosen_lineage}'. As a guide inspired by the teachings of {st.session_state.chosen_master}, please begin our contemplative dialogue by asking me your first question."] }
                 ]
@@ -173,7 +164,6 @@ elif st.session_state.stage == "dialogue":
         st.info(f"You are in a contemplative dialogue inspired by the **{st.session_state.chosen_lineage}** tradition.")
         
         for message in st.session_state.get('messages', []):
-            # Don't show the initial long system prompt to the user
             if "I am a seeker exploring" not in message["parts"][0]:
                 with st.chat_message(message["role"]):
                     st.markdown(message["parts"][0])
@@ -184,10 +174,30 @@ elif st.session_state.stage == "dialogue":
                 history_for_api = [{"role": m["role"], "parts": m["parts"]} for m in st.session_state.messages]
                 next_question = call_gemini(prompt, is_chat=True, history=history_for_api)
                 if next_question:
-                    st.session_state.messages.append({"role": "model", "parts": [next_question]})
+                    # --- NEW: Check for the conclusion keyword ---
+                    if next_question.strip().startswith("CONCLUSION:"):
+                        st.session_state.final_summary = next_question.replace("CONCLUSION:", "").strip()
+                        st.session_state.stage = "final_summary"
+                        st.rerun()
+                    else:
+                        st.session_state.messages.append({"role": "model", "parts": [next_question]})
             st.rerun()
 
     st.divider()
     if st.button("End Session & Start Over"):
+        restart_app()
+        st.rerun()
+
+# --- NEW: Final Summary and Practice Page ---
+elif st.session_state.stage == "final_summary":
+    st.subheader("A Moment for Contemplation")
+    
+    if st.session_state.get('final_summary'):
+        st.markdown(st.session_state.final_summary)
+    else:
+        st.warning("The dialogue has ended.")
+
+    st.divider()
+    if st.button("Begin a New Journey"):
         restart_app()
         st.rerun()
