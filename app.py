@@ -44,18 +44,15 @@ except (KeyError, FileNotFoundError):
 
 # --- SYSTEM INSTRUCTION (THE "GEM" PROMPT) ---
 system_instruction = """
-You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and personal contemplative journey for the user in a structured, 4-5 turn dialogue.
-
+You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and personal contemplative journey for the user.
 **Persona & Method:**
-- You will act as a wise, compassionate guide inspired by the chosen master's teachings, without directly mimicking them.
-- You will adapt your questions based on the user's temperament (provided initially) and their responses.
-
+- When guiding a dialogue, you will act as a wise, compassionate guide inspired by the chosen master's teachings, without directly mimicking them.
+- You will adapt your questions based on the user's temperament and their previous responses.
 **Dialogue Structure (Strict):**
 1.  **Turn 1 (First Question):** Start with an open-ended question to help the user explore their initial feeling.
-2.  **Turns 2-3 (Deepening Questions):** Based on the user's response, ask 1-2 follow-up questions that guide them deeper into self-inquiry, in the spirit of the chosen lineage.
-3.  **Turn 4 (The Practice):** Shift from questioning to action. Suggest a single, simple, practical contemplative exercise the user can do right now.
-4.  **Turn 5 (Conclusion):** After presenting the practice, your final message must be a brief, encouraging concluding thought or blessing to leave the user with. Start this final message with the keyword "CONCLUSION:".
-
+2.  **Turns 2-3 (Deepening Questions):** Based on the user's response, ask 1-2 follow-up questions that guide them deeper.
+3.  **Turn 4 (The Practice):** Shift from questioning to action. Suggest a single, simple, practical contemplative exercise.
+4.  **Turn 5 (Conclusion):** Your final message must be a brief, encouraging concluding thought. Start this final message with the keyword "CONCLUSION:".
 **Formatting Rules:**
 - When asked for lineages, provide a markdown list where each item is a bolded heading, a colon, and a one-sentence summary.
 - When asked to choose a master, respond with ONLY the master's name.
@@ -64,7 +61,7 @@ You are a 'Spiritual Navigator AI'. Your purpose is to facilitate a deep and per
 # --- HELPER FUNCTIONS ---
 def call_gemini(prompt, is_chat=False, history=None):
     try:
-        model = genai.GenerativeModel(model_name='gemini-2.5-pro', system_instruction=system_instruction)
+        model = genai.GenerativeModel(model_name='gemini-2.5-flash', system_instruction=system_instruction)
         if is_chat:
             chat = model.start_chat(history=history or [])
             response = chat.send_message(prompt)
@@ -119,13 +116,25 @@ elif st.session_state.stage == "choose_lineage":
     st.subheader(f"Pathways for: {st.session_state.vritti.capitalize()}")
     if 'lineages' not in st.session_state:
         with st.spinner("Finding relevant spiritual paths..."):
-            prompt = f"For a user exploring '{st.session_state.vritti}', provide a markdown list of 5 different spiritual lineages. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary of its approach."
-            response = call_gemini(prompt)
+            # --- MODIFIED: Primary, more complex prompt ---
+            prompt1 = f"For a user exploring '{st.session_state.vritti}' with guiding principles of '{st.session_state.principles_summary}', provide a markdown list of 5 different spiritual lineages. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary of its approach."
+            response = call_gemini(prompt1)
+            st.session_state.raw_response = response
+            
+            # --- NEW: Fallback Mechanism ---
+            if not response or not parse_lineage_summaries(response):
+                st.info("The first search was inconclusive. Trying a broader approach...")
+                prompt2 = f"List 5 spiritual traditions that discuss '{st.session_state.vritti}'. For each, use the lineage name as a bold heading followed by a colon and a one-sentence summary."
+                response = call_gemini(prompt2)
+                st.session_state.raw_response = response
+            
             if response:
                 st.session_state.lineages = parse_lineage_summaries(response)
 
     if not st.session_state.get('lineages'):
         st.warning("Could not find any specific paths for this topic. Please try a different query.")
+        with st.expander("Show Raw AI Response (for debugging)"):
+            st.code(st.session_state.get('raw_response', "No response from AI."))
     else:
         st.write("Choose the approach that resonates with you most:")
         for lineage, summary in st.session_state.lineages.items():
@@ -174,7 +183,6 @@ elif st.session_state.stage == "dialogue":
                 history_for_api = [{"role": m["role"], "parts": m["parts"]} for m in st.session_state.messages]
                 next_question = call_gemini(prompt, is_chat=True, history=history_for_api)
                 if next_question:
-                    # --- NEW: Check for the conclusion keyword ---
                     if next_question.strip().startswith("CONCLUSION:"):
                         st.session_state.final_summary = next_question.replace("CONCLUSION:", "").strip()
                         st.session_state.stage = "final_summary"
@@ -188,15 +196,12 @@ elif st.session_state.stage == "dialogue":
         restart_app()
         st.rerun()
 
-# --- NEW: Final Summary and Practice Page ---
 elif st.session_state.stage == "final_summary":
     st.subheader("A Moment for Contemplation")
-    
     if st.session_state.get('final_summary'):
         st.markdown(st.session_state.final_summary)
     else:
         st.warning("The dialogue has ended.")
-
     st.divider()
     if st.button("Begin a New Journey"):
         restart_app()
